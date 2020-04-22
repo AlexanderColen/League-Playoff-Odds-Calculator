@@ -84,38 +84,23 @@ class Team:
                and self.name == other.name
 
     def __lt__(self, other):
-        # Sort on wins first.
-        if self.wins > other.wins:
+        # Sort on wins.
+        if self.wins != other.wins:
+            return self.wins < other.wins
+        # Sort on losses.
+        elif self.losses != other.losses:
+            return self.losses > other.losses
+        # Sort on head-to-head.
+        elif other.name in self.own_h2h:
             return False
-        elif self.wins < other.wins:
+        elif other.name in self.lost_h2h:
             return True
+        # Sort on average win time.
+        elif self.average_win_time != other.average_win_time:
+            return self.average_win_time < other.average_win_time
+        # Sort on name.
         else:
-            # Sort on losses second if wins are equal.
-            if self.losses < other.losses:
-                return False
-            elif self.losses > other.losses:
-                return True
-            else:
-                # Sort on head-to-head if losses are also equal.
-                if other.name in self.own_h2h:
-                    return False
-                elif other.name in self.lost_h2h:
-                    return True
-                else:
-                    # Sort on average win-time if head-to-head are also equal.
-                    if self.average_win_time < other.average_win_time:
-                        return False
-                    elif self.average_win_time > other.average_win_time:
-                        return True
-                    else:
-                        # If everything is equal, just sort alphabetically.
-                        if self.name > other.name:
-                            return False
-                        elif self.name < other.name:
-                            return True
-                        else:
-                            # If all else fails. It's a tie.
-                            return True
+            return self.name < other.name
 
     def __str__(self) -> str:
         m, s = divmod(self.average_win_time, 60)
