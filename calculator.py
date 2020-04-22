@@ -36,32 +36,37 @@ def generate_results() -> List[List]:
 
             m.append(match)
 
-            for team in t:
-                if team.name == match.red_team:
-                    if match.winner == 'red':
-                        team.add_win(playtime=match.playtime, side='red')
-                    else:
-                        team.add_loss(side='red')
-                elif team.name == match.blue_team:
-                    if match.winner == 'blue':
-                        team.add_win(playtime=match.playtime, side='blue')
-                    else:
-                        team.add_loss(side='blue')
+            # Only add wins/losses when there was a match winner. Otherwise it hasn't been played yet.
+            if match.winner:
+                for team in t:
+                    if team.name == match.red_team:
+                        if match.winner == 'red':
+                            team.add_win(playtime=match.playtime, side='red', enemy=match.blue_team)
+                        else:
+                            team.add_loss(side='red', enemy=match.blue_team)
+                    elif team.name == match.blue_team:
+                        if match.winner == 'blue':
+                            team.add_win(playtime=match.playtime, side='blue', enemy=match.red_team)
+                        else:
+                            team.add_loss(side='blue', enemy=match.red_team)
 
     return [t, m]
 
 
-def get_standings(t: List[Team]) -> List[Team]:
-    t.sort(key=lambda x: x.name)
-    t.sort(key=lambda x: x.average_win_time)
-    t.sort(key=lambda x: x.losses)
-    t.sort(key=lambda x: x.wins, reverse=True)
-    return t
+def sort_standings(t: List[Team]) -> List[Team]:
+    """
+    Sort the standings based on multiple Team attributes.
+    :param t: The List of Teams.
+    :return: The sorted List of Teams.
+    """
+    sorted_teams: List[Team] = sorted(t)
+    sorted_teams.reverse()
+    return sorted_teams
 
 
 if __name__ == '__main__':
     teams, matches = generate_results()
-    standings: List[Team] = get_standings(t=teams)
+    standings: List[Team] = sort_standings(t=teams)
 
     for s in standings:
         print(s)
