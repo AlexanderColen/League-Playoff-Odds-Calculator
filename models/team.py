@@ -44,7 +44,7 @@ class Team:
 
         # Keep track of head-to-head for tiebreakers.
         if enemy in self.won_vs:
-            self.won_vs.remove(enemy)
+            self.won_vs.append(enemy)
             self.own_h2h.append(enemy)
         else:
             self.won_vs.append(enemy)
@@ -62,7 +62,7 @@ class Team:
 
         # Keep track of head-to-head for tiebreakers.
         if enemy in self.lost_vs:
-            self.lost_vs.remove(enemy)
+            self.lost_vs.append(enemy)
             self.lost_h2h.append(enemy)
         else:
             self.lost_vs.append(enemy)
