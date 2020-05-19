@@ -1,5 +1,5 @@
-import itertools
-from typing import Any, Dict, Iterable, List, Tuple
+from copy import deepcopy
+from typing import List
 from models.match import Match
 from models.team import Team
 
@@ -23,18 +23,22 @@ def generate_results() -> List[List]:
     :return: The list of teams with their new wins and losses.
     """
     t: List[Team] = read_teams()
-    m: List[Match] = []
+    p: List[Match] = []
+    u: List[Match] = []
 
     with open('resources/results.txt', 'r', encoding='utf-8') as f:
         for l in f:
             w = l.split()
             match: Match = Match(blue_team=w[0], red_team=w[1])
 
+            # Match has been played and contains a winner and playtime.
             if len(w) == 4:
                 match.winner = w[2]
                 match.playtime = int(w[3].split(':')[0]) * 60 + int(w[3].split(':')[1])
-
-            m.append(match)
+                p.append(match)
+            # Match has not been played yet.
+            else:
+                u.append(match)
 
             # Only add wins/losses when there was a match winner. Otherwise it hasn't been played yet.
             if match.winner:
@@ -50,21 +54,15 @@ def generate_results() -> List[List]:
                         else:
                             team.add_loss(side='blue', enemy=match.red_team)
 
-    return [t, m]
-
-
-def sort_standings(t: List[Team]) -> List[Team]:
-    """
-    Sort the standings based on multiple Team attributes.
-    :param t: The List of Teams.
-    :return: The sorted List of Teams.
-    """
-    sorted_teams: List[Team] = sorted(t)
-    sorted_teams.reverse()
-    return sorted_teams
+    return [t, p, u]
 
 
 def calculate_three_way_ties(t: List[Team]) -> List[Team]:
+    """
+    Calculate the result of three way ties based on H2H and average game time.
+    :param t: The List of Teams.
+    :return: The newly sorted List of Teams.
+    """
     tied_teams: List[Team] = []
     tied_teams_indexes: List[int] = []
     three_way_ties = []
@@ -98,11 +96,6 @@ def calculate_three_way_ties(t: List[Team]) -> List[Team]:
             mini_bracket.append(bracket_team)
             bracket_team_names.append(bracket_team.name)
 
-        print('\nZipped Before:')
-        zipped = list(zip(tie, three_way_ties_indexes[num]))
-        for z in zipped:
-            print(f'{z[0].name} - {z[1]}')
-
         for team in mini_bracket:
             # Add wins.
             for win in team.won_vs:
@@ -123,10 +116,97 @@ def calculate_three_way_ties(t: List[Team]) -> List[Team]:
     return new_standings
 
 
-if __name__ == '__main__':
-    teams, matches = generate_results()
-    standings: List[Team] = sort_standings(t=teams)
-    standings = calculate_three_way_ties(t=standings)
+def sort_standings(t: List[Team], print_outcomes: bool = True) -> List[Team]:
+    """
+    Sort the standings based on multiple Team attributes.
+    :param t: The List of Teams.
+    :param print_outcomes: Boolean indicating if the standings needs to be printed afterwards.
+    :return: The sorted List of Teams.
+    """
+    sorted_teams: List[Team] = sorted(t)
+    sorted_teams.reverse()
+    sorted_teams = calculate_three_way_ties(sorted_teams)
 
-    for rank, s in enumerate(standings):
-        print(f'{rank+1}: {s}')
+    if print_outcomes:
+        # Outputs the current standings.
+        print('Current standings:')
+        for rank, s in enumerate(sorted_teams):
+            print(f'{rank + 1}: {s}')
+
+    return sorted_teams
+
+
+def increment_team_win_loss(match: Match, t: List[Team]) -> List[List[Team]]:
+    """
+    Add win and loss possibilities for a match.
+    :param match: The Match that is to be played.
+    :param t: The List of Teams.
+    :return: A List containing possible standings.
+    """
+    possible_team_standings: List[List[Team]] = []
+    # If red team wins
+    new_teams: List[Team] = deepcopy(t)
+    for team in new_teams:
+        if team.name == match.red_team:
+            # Take average game time of 30 minutes to not influence average win time as much.
+            team.add_win(playtime=1800, side='red', enemy=match.blue_team)
+        elif team.name == match.blue_team:
+            team.add_loss(side='blue', enemy=match.red_team)
+
+    possible_team_standings.append(new_teams)
+
+    # If blue team wins
+    new_teams: List[Team] = deepcopy(t)
+    for team in new_teams:
+        if team.name == match.red_team:
+            team.add_loss(side='red', enemy=match.blue_team)
+        elif team.name == match.blue_team:
+            # Take average game time of 30 minutes to not influence average win time as much.
+            team.add_win(playtime=1800, side='blue', enemy=match.red_team)
+
+    possible_team_standings.append(new_teams)
+
+    return possible_team_standings
+
+
+def predict_future_standings_loops(t: List[Team], u: List[Match], print_outcomes: bool = True) -> List[List[Team]]:
+    """
+    Predict the future standings based on unplayed matches with a 50% chance for either team to win.
+    :param t: The List of Teams.
+    :param u: The List of unplayed Matches.
+    :param print_outcomes: Boolean indicating if the possible standings need to be printed afterwards.
+    :return The List containing all outcome possibilities.
+    """
+    print('\n##############################\nPredicting future standings...\n##############################\n')
+    possible_team_standings: List[List[Team]] = []
+    for match_num, unplayed in enumerate(u):
+        print(f'Predicting match #{match_num}... ({unplayed.blue_team} vs {unplayed.red_team})')
+        if match_num == 0:
+            possible_team_standings.extend(increment_team_win_loss(match=unplayed, t=t))
+        else:
+            pre_loop = deepcopy(possible_team_standings)
+            for p in pre_loop:
+                possible_team_standings.extend(increment_team_win_loss(match=unplayed, t=p))
+
+    # Splice the possible standings to only include the final 2^length of unplayed matches.
+    spliced_standings = possible_team_standings[len(possible_team_standings)-2**len(u):]
+
+    if print_outcomes:
+        for i, possible in enumerate(spliced_standings):
+            print(f'\nPrediction #{i+1}:')
+            standing = sort_standings(t=possible, print_outcomes=False)
+            # Outputs the predicted standings.
+            for r, st in enumerate(standing):
+                print(f'{r + 1}: {st}')
+
+    return spliced_standings
+
+
+if __name__ == '__main__':
+    teams, played_matches, unplayed_matches = generate_results()
+    # Calculates the current standings.
+    standings: List[Team] = sort_standings(t=teams, print_outcomes=True)
+
+    if len(unplayed_matches) > 0:
+        # Predict possible standings with unplayed matches using loops.
+        predict_future_standings_loops(standings, unplayed_matches, print_outcomes=True)
