@@ -1,6 +1,8 @@
 from copy import deepcopy
+import time
 from typing import List
 from models.match import Match
+from models.odds import Odds
 from models.team import Team
 
 
@@ -169,6 +171,49 @@ def increment_team_win_loss(match: Match, t: List[Team]) -> List[List[Team]]:
     return possible_team_standings
 
 
+def visualize_odds(odds: List[Odds]):
+    """
+    Visualize the standings as a table in the output window.
+    :param odds: The List of Odds.
+    """
+    print(f'\nPredicted Standings Odds: ({odds[0].total_times} Total Scenarios)')
+    column_width = 7
+    print('-'*97)
+    columns: List[str] = ['team', 'score', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
+    header_string: str = "|"
+    for column in columns:
+        header_string += f'{"{:^{width}}".format(column.capitalize(), width=column_width)}|'
+    print(header_string)
+    print('-'*97)
+    for o in odds:
+        # Team column.
+        concatenated_string: str = f'|{"{:^{width}}".format(o.team_name, width=column_width)}|'
+        # Score column.
+        concatenated_string += f'{"{:^{width}}".format(o.win_loss, width=column_width)}|'
+        # 1st column.
+        concatenated_string += f'{"{:^{width}}".format(o.first_odds, width=column_width)}|'
+        # 2nd column.
+        concatenated_string += f'{"{:^{width}}".format(o.second_odds, width=column_width)}|'
+        # 3rd column.
+        concatenated_string += f'{"{:^{width}}".format(o.third_odds, width=column_width)}|'
+        # 4th column.
+        concatenated_string += f'{"{:^{width}}".format(o.fourth_odds, width=column_width)}|'
+        # 5th column.
+        concatenated_string += f'{"{:^{width}}".format(o.fifth_odds, width=column_width)}|'
+        # 6th column.
+        concatenated_string += f'{"{:^{width}}".format(o.sixth_odds, width=column_width)}|'
+        # 7th column.
+        concatenated_string += f'{"{:^{width}}".format(o.seventh_odds, width=column_width)}|'
+        # 8th column.
+        concatenated_string += f'{"{:^{width}}".format(o.eighth_odds, width=column_width)}|'
+        # 9th column.
+        concatenated_string += f'{"{:^{width}}".format(o.ninth_odds, width=column_width)}|'
+        # 10th column.
+        concatenated_string += f'{"{:^{width}}".format(o.tenth_odds, width=column_width)}|'
+        print(concatenated_string)
+        print('-'*97)
+
+
 def predict_future_standings_loops(t: List[Team], u: List[Match], print_outcomes: bool = True) -> List[List[Team]]:
     """
     Predict the future standings based on unplayed matches with a 50% chance for either team to win.
@@ -177,36 +222,50 @@ def predict_future_standings_loops(t: List[Team], u: List[Match], print_outcomes
     :param print_outcomes: Boolean indicating if the possible standings need to be printed afterwards.
     :return The List containing all outcome possibilities.
     """
-    print('\n##############################\nPredicting future standings...\n##############################\n')
+    print(f'\n{"#"*30}\nPredicting future standings...\n{"#"*30}\n')
     possible_team_standings: List[List[Team]] = []
     for match_num, unplayed in enumerate(u):
-        print(f'Predicting match #{match_num}... ({unplayed.blue_team} vs {unplayed.red_team})')
+        print(f'Predicting match #{match_num}/{len(u)}... ({unplayed.blue_team} vs {unplayed.red_team})')
+        new_possibilities: List[List[Team]] = []
         if match_num == 0:
-            possible_team_standings.extend(increment_team_win_loss(match=unplayed, t=t))
+            new_possibilities.extend(increment_team_win_loss(match=unplayed, t=t))
         else:
-            pre_loop = deepcopy(possible_team_standings)
-            for p in pre_loop:
-                possible_team_standings.extend(increment_team_win_loss(match=unplayed, t=p))
+            for p in possible_team_standings:
+                new_possibilities.extend(increment_team_win_loss(match=unplayed, t=p))
+        possible_team_standings.extend(new_possibilities)
+
+    # Initialize the Odds list for each team.
+    odds: List[Odds] = []
+    for team in t:
+        odds.append(Odds(team_name=team.name, wins=team.wins, losses=team.losses))
 
     # Splice the possible standings to only include the final 2^length of unplayed matches.
     spliced_standings = possible_team_standings[len(possible_team_standings)-2**len(u):]
 
-    if print_outcomes:
-        for i, possible in enumerate(spliced_standings):
+    for i, possible in enumerate(spliced_standings):
+        if print_outcomes:
             print(f'\nPrediction #{i+1}:')
-            standing = sort_standings(t=possible, print_outcomes=False)
-            # Outputs the predicted standings.
-            for r, st in enumerate(standing):
-                print(f'{r + 1}: {st}')
+
+        possible = sort_standings(t=possible, print_outcomes=print_outcomes)
+        for num, p in enumerate(possible):
+            for o in odds:
+                if o.team_name == p.name:
+                    o.add_possibility(num + 1)
+
+    visualize_odds(odds=odds)
 
     return spliced_standings
 
 
 if __name__ == '__main__':
+    start = time.time()
     teams, played_matches, unplayed_matches = generate_results()
     # Calculates the current standings.
-    standings: List[Team] = sort_standings(t=teams, print_outcomes=True)
+    standings: List[Team] = sort_standings(t=teams, print_outcomes=False)
 
     if len(unplayed_matches) > 0:
         # Predict possible standings with unplayed matches using loops.
-        predict_future_standings_loops(standings, unplayed_matches, print_outcomes=True)
+        predict_future_standings_loops(standings, unplayed_matches, print_outcomes=False)
+
+    end = time.time()
+    print(f'Calculated in {end - start} seconds.')
