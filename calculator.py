@@ -1,4 +1,4 @@
-from copy import deepcopy
+import pickle
 import time
 from typing import List
 from models.match import Match
@@ -146,8 +146,10 @@ def increment_team_win_loss(match: Match, t: List[Team]) -> List[List[Team]]:
     :return: A List containing possible standings.
     """
     possible_team_standings: List[List[Team]] = []
-    # If red team wins
-    new_teams: List[Team] = deepcopy(t)
+    p_dump = pickle.dumps(t, -1)
+
+    # If red team wins:
+    new_teams: List[Team] = pickle.loads(p_dump)
     for team in new_teams:
         if team.name == match.red_team:
             # Take average game time of 30 minutes to not influence average win time as much.
@@ -157,8 +159,8 @@ def increment_team_win_loss(match: Match, t: List[Team]) -> List[List[Team]]:
 
     possible_team_standings.append(new_teams)
 
-    # If blue team wins
-    new_teams: List[Team] = deepcopy(t)
+    # If blue team wins:
+    new_teams: List[Team] = pickle.loads(p_dump)
     for team in new_teams:
         if team.name == match.red_team:
             team.add_loss(side='red', enemy=match.blue_team)
@@ -171,47 +173,38 @@ def increment_team_win_loss(match: Match, t: List[Team]) -> List[List[Team]]:
     return possible_team_standings
 
 
-def visualize_odds(odds: List[Odds]):
+def visualize_odds(odds: List[Odds], decimals: int = 2, column_width: int = 7):
     """
     Visualize the standings as a table in the output window.
     :param odds: The List of Odds.
+    :param decimals: The amount of decimals that the percentages should be formatted to.
+    :param column_width: The width of every column in the output.
     """
     print(f'\nPredicted Standings Odds: ({odds[0].total_times} Total Scenarios)')
-    column_width = 7
-    print('-'*97)
-    columns: List[str] = ['team', 'score', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
+    columns: List[str] = ['team', 'score']
+    # Add columns equal to amount of teams, fetched from the List of Odds in this case.
+    columns += [f'{i}' for i in range(1, len(odds[0].rank_odds) + 1)]
     header_string: str = "|"
     for column in columns:
         header_string += f'{"{:^{width}}".format(column.capitalize(), width=column_width)}|'
+    divider: str = '-'*len(header_string)
+    print(divider)
     print(header_string)
-    print('-'*97)
+    print(divider)
     for o in odds:
+        o.calculate_odds()
         # Team column.
         concatenated_string: str = f'|{"{:^{width}}".format(o.team_name, width=column_width)}|'
         # Score column.
         concatenated_string += f'{"{:^{width}}".format(o.win_loss, width=column_width)}|'
-        # 1st column.
-        concatenated_string += f'{"{:^{width}}".format(o.first_odds, width=column_width)}|'
-        # 2nd column.
-        concatenated_string += f'{"{:^{width}}".format(o.second_odds, width=column_width)}|'
-        # 3rd column.
-        concatenated_string += f'{"{:^{width}}".format(o.third_odds, width=column_width)}|'
-        # 4th column.
-        concatenated_string += f'{"{:^{width}}".format(o.fourth_odds, width=column_width)}|'
-        # 5th column.
-        concatenated_string += f'{"{:^{width}}".format(o.fifth_odds, width=column_width)}|'
-        # 6th column.
-        concatenated_string += f'{"{:^{width}}".format(o.sixth_odds, width=column_width)}|'
-        # 7th column.
-        concatenated_string += f'{"{:^{width}}".format(o.seventh_odds, width=column_width)}|'
-        # 8th column.
-        concatenated_string += f'{"{:^{width}}".format(o.eighth_odds, width=column_width)}|'
-        # 9th column.
-        concatenated_string += f'{"{:^{width}}".format(o.ninth_odds, width=column_width)}|'
-        # 10th column.
-        concatenated_string += f'{"{:^{width}}".format(o.tenth_odds, width=column_width)}|'
+        # Rank columns.
+        for r_odds in o.rank_odds:
+            percentage = 'X'
+            if r_odds > 0:
+                percentage = f"{r_odds:.{decimals}%}"
+            concatenated_string += f'{"{:^{width}}".format(percentage, width=column_width)}|'
         print(concatenated_string)
-        print('-'*97)
+        print(divider)
 
 
 def predict_future_standings_loops(t: List[Team], u: List[Match], print_outcomes: bool = True) -> List[List[Team]]:
@@ -225,7 +218,7 @@ def predict_future_standings_loops(t: List[Team], u: List[Match], print_outcomes
     print(f'\n{"#"*30}\nPredicting future standings...\n{"#"*30}\n')
     possible_team_standings: List[List[Team]] = []
     for match_num, unplayed in enumerate(u):
-        print(f'Predicting match #{match_num}/{len(u)}... ({unplayed.blue_team} vs {unplayed.red_team})')
+        print(f'Predicting match #{match_num + 1}/{len(u)}... ({unplayed.blue_team} vs {unplayed.red_team})')
         new_possibilities: List[List[Team]] = []
         if match_num == 0:
             new_possibilities.extend(increment_team_win_loss(match=unplayed, t=t))
@@ -237,7 +230,7 @@ def predict_future_standings_loops(t: List[Team], u: List[Match], print_outcomes
     # Initialize the Odds list for each team.
     odds: List[Odds] = []
     for team in t:
-        odds.append(Odds(team_name=team.name, wins=team.wins, losses=team.losses))
+        odds.append(Odds(team_name=team.name, wins=team.wins, losses=team.losses, total_teams=len(t)))
 
     # Splice the possible standings to only include the final 2^length of unplayed matches.
     spliced_standings = possible_team_standings[len(possible_team_standings)-2**len(u):]
@@ -250,9 +243,9 @@ def predict_future_standings_loops(t: List[Team], u: List[Match], print_outcomes
         for num, p in enumerate(possible):
             for o in odds:
                 if o.team_name == p.name:
-                    o.add_possibility(num + 1)
+                    o.add_possibility(num)
 
-    visualize_odds(odds=odds)
+    visualize_odds(odds=odds, decimals=2, column_width=9)
 
     return spliced_standings
 
@@ -267,5 +260,4 @@ if __name__ == '__main__':
         # Predict possible standings with unplayed matches using loops.
         predict_future_standings_loops(standings, unplayed_matches, print_outcomes=False)
 
-    end = time.time()
-    print(f'Calculated in {end - start} seconds.')
+    print(f'Calculated in {time.time() - start} seconds.')
