@@ -6,29 +6,31 @@ from models.odds import Odds
 from models.team import Team
 
 
-def read_teams() -> List[Team]:
+def read_teams(r: str) -> List[Team]:
     """
     Reads the team names from the resources/teams.txt file.
+    :param r: The region to read teams for.
     :return: A list with all the teams as Team objects.
     """
     t: List[Team] = []
-    with open('resources/teams.txt', 'r', encoding='utf-8') as f:
+    with open(f'resources/teams_{r}.txt', 'r', encoding='utf-8') as f:
         for l in f:
             t.append(Team(name=l.rstrip('\n')))
 
     return t
 
 
-def generate_results() -> List[List]:
+def generate_results(r: str) -> List[List]:
     """
     Reads the results and increments wins and losses in the list of teams appropriately.
+    :param r: The region to generate results for.
     :return: The list of teams with their new wins and losses.
     """
-    t: List[Team] = read_teams()
+    t: List[Team] = read_teams(r=r)
     p: List[Match] = []
     u: List[Match] = []
 
-    with open('resources/results.txt', 'r', encoding='utf-8') as f:
+    with open(f'resources/results_{region}.txt', 'r', encoding='utf-8') as f:
         for l in f:
             w = l.split()
             match: Match = Match(blue_team=w[0], red_team=w[1])
@@ -71,7 +73,11 @@ def calculate_three_way_ties(t: List[Team]) -> List[Team]:
     three_way_ties_indexes = []
     last_win_loss = 0
     for r, te in enumerate(t):
-        team_win_loss = te.wins / te.losses
+        team_win_loss: float = 0
+        # Cannot divide by zero, so check for that.
+        if te.losses != 0:
+            team_win_loss = te.wins / te.losses
+        # Change teams if win_loss has changed.
         if team_win_loss != last_win_loss:
             last_win_loss = team_win_loss
             tied_teams = [te]
@@ -188,9 +194,7 @@ def visualize_odds(odds: List[Odds], decimals: int = 2, column_width: int = 7):
     for column in columns:
         header_string += f'{"{:^{width}}".format(column.capitalize(), width=column_width)}|'
     divider: str = '-'*len(header_string)
-    print(divider)
-    print(header_string)
-    print(divider)
+    print(f'{divider}\n{header_string}\n{divider}')
     for o in odds:
         o.calculate_odds()
         # Team column.
@@ -203,8 +207,7 @@ def visualize_odds(odds: List[Odds], decimals: int = 2, column_width: int = 7):
             if r_odds > 0:
                 percentage = f"{r_odds:.{decimals}%}"
             concatenated_string += f'{"{:^{width}}".format(percentage, width=column_width)}|'
-        print(concatenated_string)
-        print(divider)
+        print(f'{concatenated_string}\n{divider}')
 
 
 def predict_future_standings_loops(t: List[Team], u: List[Match], print_outcomes: bool = True) -> List[List[Team]]:
@@ -251,13 +254,26 @@ def predict_future_standings_loops(t: List[Team], u: List[Match], print_outcomes
 
 
 if __name__ == '__main__':
-    start = time.time()
-    teams, played_matches, unplayed_matches = generate_results()
-    # Calculates the current standings.
-    standings: List[Team] = sort_standings(t=teams, print_outcomes=False)
+    # Loop for choosing region.
+    while True:
+        region: str = input('Choose your region: NA or EU\n>>>').upper()
+        if region in ['NA', 'EU']:
+            break
+        print('Please enter either \'NA\' or \'EU\'')
 
-    if len(unplayed_matches) > 0:
+    teams, played_matches, unplayed_matches = generate_results(r=region)
+
+    show_outcomes: bool = False
+    if input('Do you want to see the standings? (Y/N)\n>>>').lower() in ['yes', 'ye', 'y']:
+        show_outcomes = True
+    # Calculates the current standings.
+    standings: List[Team] = sort_standings(t=teams, print_outcomes=show_outcomes)
+
+    # Only predict standings if there are unplayed matches and the user wants to calculate them.
+    if len(unplayed_matches) > 0 \
+            and input('Do you also want to calculate playoff odds? (Y/N)\n>>>').lower() in ['yes', 'ye', 'y']:
+        start = time.time()
         # Predict possible standings with unplayed matches using loops.
         predict_future_standings_loops(standings, unplayed_matches, print_outcomes=False)
 
-    print(f'Calculated in {time.time() - start} seconds.')
+        print(f'Calculated in {time.time() - start} seconds.')
